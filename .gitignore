@@ -205,3 +205,21 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ─── Data files ───
+data/*.csv
+data/*.zip
+data/*.gz
+
+# ─── Models ───
+models/*.pkl
+models/*.keras
+models/*.h5
+
+# ─── Jupyter checkpoints ───
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ─── Virtual environment ───
+.venv/
+venv/
