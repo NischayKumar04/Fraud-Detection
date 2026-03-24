@@ -222,4 +222,9 @@ models/*.h5
 
 # ─── Virtual environment ───
 .venv/
-venv/
+venv/.venv/
+__pycache__/
+.ipynb_checkpoints/
+*.pkl
+.DS_Store
+data/raw/*
