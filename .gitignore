@@ -215,6 +215,7 @@ data/*.gz
 models/*.pkl
 models/*.keras
 models/*.h5
+models/*.joblib
 
 # ─── Jupyter checkpoints ───
 .ipynb_checkpoints/

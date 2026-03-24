@@ -1,0 +1,5 @@
+{
+  "best_model": "xgb",
+  "best_threshold": 0.6621958017349243,
+  "rows_used": 120000
+}
