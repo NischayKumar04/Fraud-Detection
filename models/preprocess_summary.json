@@ -1,0 +1,6 @@
+{
+  "rows": 590540,
+  "cols": 728,
+  "output": "D:\\Projects\\clone\\Fraud-Detection\\data\\clean_train.csv",
+  "artifacts": "D:\\Projects\\clone\\Fraud-Detection\\models\\preprocess_artifacts.joblib"
+}

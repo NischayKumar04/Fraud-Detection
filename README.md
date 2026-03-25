@@ -1,62 +1,54 @@
-# 🔍 Fraud Detection System
+# 🔍 Fraud Detection System (IEEE-CIS)
 
-End-to-end fraud detection system built on the **IEEE-CIS Fraud Detection dataset** (**590K+ transactions**) with a production-style ML pipeline, including:
-
-- **Graph-based fraud ring features** (NetworkX)
-- **Threshold-tuned supervised models** (RF / LightGBM / XGBoost)
-- **Model comparison + metrics tracking**
-- **Streamlit app for interactive fraud scoring**
+An end-to-end fraud detection pipeline using the IEEE-CIS dataset (**590,540 transactions**), with reproducible preprocessing, model training, threshold tuning, evaluation, and prediction APIs.
 
 ---
 
-## 🚀 Highlights
+## 🚀 Project Highlights
 
-| Capability | What it does | Why it matters |
-|---|---|---|
-| **Graph Features** | Connects cards via shared address relationships and computes graph centrality features | Helps identify coordinated fraud ring behavior |
-| **Script-based Pipeline (`src/`)** | Reproducible train/eval workflow via CLI | Better than notebook-only workflows for real projects |
-| **Threshold Tuning** | Searches decision threshold using PR curve/F1 | Improves fraud precision-recall tradeoff |
-| **Model Registry in Training** | Trains `lr`, `rf`, `lgbm`, `xgb`, or `all` from one script | Easy experimentation without rewriting code |
-| **Streamlit App** | UI for model inference and quick demos | Portfolio-ready deployment interface |
-
----
-
-## 📊 Current Results (latest run)
-
-From your latest successful training/evaluation screenshot:
-
-- **Best model:** `xgb`
-- **Best threshold:** `0.6622`
-- **Rows used for training:** `120000`
-
-### Evaluation Snapshot
-
-- **Accuracy:** `0.9803`
-- **Class 1 (Fraud) Precision:** `0.7491`
-- **Class 1 (Fraud) Recall:** `0.6550`
-- **Class 1 (Fraud) F1:** `0.6989`
-- **Macro F1:** `0.8443`
-
-> Exact model-wise metrics are saved in `models/metrics.json`.
+- ✅ Full dataset training (`rows_used = 590,540`)
+- ✅ Time-based split to reduce leakage risk
+- ✅ Multiple models: Logistic Regression, Random Forest, LightGBM, XGBoost
+- ✅ Threshold search per model (not fixed 0.5 only)
+- ✅ Artifact-based deployment (`best_model.joblib`, `best_model_info.json`, `metrics.json`)
+- ✅ Streamlit-ready prediction workflow
 
 ---
 
-## 🗂️ Project Structure
+## 📊 Latest Results (from `models/metrics.json`)
+
+**Best model:** `xgb`  
+**Best threshold:** `0.7676`  
+**Best PR-AUC:** `0.5512`  
+**Split type:** `time_based`
+
+### Tuned metrics by model
+
+| Model | PR-AUC | ROC-AUC | F1 (tuned) | Precision (tuned) | Recall (tuned) | Best Threshold |
+|---|---:|---:|---:|---:|---:|---:|
+| Logistic Regression | 0.1785 | 0.8317 | 0.3204 | 0.2854 | 0.3652 | 0.8566 |
+| Random Forest | 0.4586 | 0.8779 | 0.4581 | 0.4913 | 0.4291 | 0.6335 |
+| LightGBM | 0.5395 | 0.9117 | 0.5295 | 0.6183 | 0.4631 | 0.8192 |
+| **XGBoost (Best)** | **0.5512** | **0.9181** | **0.5366** | **0.6159** | **0.4754** | **0.7676** |
+
+> Note: At default threshold `0.5`, recall is higher for some models, but tuned thresholds optimize F1/precision-recall tradeoff.
+
+---
+
+## 🧱 Repository Structure
 
 ```text
 Fraud-Detection/
-├── app/
-│   └── streamlit_app.py
 ├── data/
-│   ├── raw/                    # Kaggle source files (ignored in git)
-│   └── clean_train.csv         # engineered dataset (ignored in git)
+│   ├── train_transaction.csv
+│   ├── train_identity.csv
+│   └── clean_train.csv
 ├── models/
+│   ├── best_model.joblib
 │   ├── best_model_info.json
-│   └── metrics.json
-├── notebooks/
-│   ├── 01_eda.ipynb
-│   ├── 2_feature_engg.ipynb
-│   └── 3_Modelling.ipynb
+│   ├── metrics.json
+│   ├── preprocess_artifacts.joblib
+│   └── preprocess_summary.json
 ├── src/
 │   ├── data_loader.py
 │   ├── preprocess.py
@@ -65,27 +57,20 @@ Fraud-Detection/
 │   ├── evaluate.py
 │   ├── predict.py
 │   └── utils.py
+├── app/
+│   └── streamlit_app.py
+├── notebooks/
+│   ├── 01_eda.ipynb
+│   ├── 2_feature_engg.ipynb
+│   └── 3_Modelling.ipynb
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## ⚙️ Setup
 
-- **Data/ML:** Pandas, NumPy, scikit-learn
-- **Boosting:** LightGBM, XGBoost
-- **Graph Features:** NetworkX
-- **Deep Learning (notebook experiments):** TensorFlow/Keras (autoencoder)
-- **App:** Streamlit
-- **Version Control:** Git + GitHub
-
----
-
-## ⚡ Setup
-
-### 1) Clone & create environment
 ```bash
 git clone https://github.com/NischayKumar04/Fraud-Detection.git
 cd Fraud-Detection
@@ -100,77 +85,101 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2) Prepare data
-- Download IEEE-CIS data from Kaggle
-- Place raw files under `data/raw/`
-- Run preprocessing / feature-engineering pipeline (notebook or scripts) to create `data/clean_train.csv`
+---
+
+## 🧹 Preprocessing
+
+Build clean training data from raw Kaggle files:
+
+```bash
+python -m src.preprocess
+```
+
+This creates:
+- `data/clean_train.csv`
+- `models/preprocess_artifacts.joblib`
+- `models/preprocess_summary.json`
 
 ---
 
-## 🧪 Training & Evaluation (Script-first workflow)
+## 🏋️ Training
 
-### Train all models and auto-select best by PR-AUC
+Train all models and automatically select best one by PR-AUC:
+
 ```bash
-python -m src.train --model all --max_rows 120000
+python -m src.train --model all --max_rows 0
 ```
 
-### Train one model only
-```bash
-python -m src.train --model xgb --max_rows 120000
-python -m src.train --model lgbm --max_rows 120000
-python -m src.train --model rf --max_rows 80000
-python -m src.train --model lr --max_rows 120000
-```
+Arguments:
+- `--model`: `all | lr | rf | lgbm | xgb`
+- `--max_rows 0`: use full dataset (debug cap if >0)
 
-### Evaluate using saved model + tuned threshold
+Outputs:
+- `models/best_model.joblib`
+- `models/best_model_info.json`
+- `models/metrics.json`
+
+---
+
+## 📈 Evaluation
+
 ```bash
 python -m src.evaluate
 ```
 
----
-
-## 💾 Artifacts
-
-Training saves:
-
-- `models/best_model.joblib` *(ignored in git)*
-- `models/metrics.json`
-- `models/best_model_info.json`
-
-`best_model_info.json` includes the tuned threshold used in evaluation/app inference.
+- Loads best model + tuned threshold from artifacts
+- Prints confusion matrix + classification report
 
 ---
 
-## 🖥️ Run Streamlit App
+## 🔮 Prediction
+
+Example usage in Python:
+
+```python
+import pandas as pd
+from src.predict import predict_batch
+
+df = pd.read_csv("data/clean_train.csv").head(100)
+out = predict_batch(df)  # uses saved tuned threshold automatically
+print(out[["fraud_probability", "fraud_prediction"]].head())
+```
+
+---
+
+## 🖥️ Streamlit App
 
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
----
-
-## 📌 Recommended Workflow
-
-- Use **notebooks** for exploration/analysis.
-- Use **`src/` scripts as source of truth** for reproducible training/evaluation.
-- Keep notebook outputs cleared before commit to avoid repo bloat.
+Supports:
+- CSV upload scoring
+- sample batch scoring
+- threshold slider for business tuning
 
 ---
 
-## ✅ Roadmap
+## 📌 Current Notes
 
-- [x] EDA and fraud behavior analysis
-- [x] Feature engineering (including graph features)
-- [x] Reproducible training/evaluation pipeline (`src/`)
-- [x] Threshold tuning + metrics tracking
-- [x] Streamlit demo app
-- [ ] FastAPI inference API
-- [ ] Dockerization + deployment
-- [ ] CI checks and automated model validation
+- `preprocess_summary.json` currently stores absolute Windows paths.  
+  For portability, prefer relative paths in future update.
+- Threshold was optimized for F1; if your business needs higher recall, use a lower threshold in serving (e.g., 0.5–0.65) and monitor false positives.
+
+---
+
+## 🛣️ Next Improvements
+
+- [ ] Add graph features from notebook directly into `src/preprocess.py`
+- [ ] Add leakage-safe target encoding in `src` pipeline
+- [ ] Add cross-validation (time-series folds)
+- [ ] Add SHAP explainability report
+- [ ] Add `tests/` (smoke + metric sanity + schema validation)
+- [ ] Add FastAPI inference endpoint + Dockerized deployment
 
 ---
 
 ## 👤 Author
 
 **Nischay Kumar**  
-GitHub: [NischayKumar04](https://github.com/NischayKumar04)
+GitHub: [@NischayKumar04](https://github.com/NischayKumar04)
