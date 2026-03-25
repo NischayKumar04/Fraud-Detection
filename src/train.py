@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+from sklearn.metrics import confusion_matrix
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
@@ -42,7 +43,7 @@ def compute_metrics(y_true, y_prob, threshold=0.5):
     }
 
 
-def find_best_threshold(y_true, y_prob):
+def find_best_threshold_f1(y_true, y_prob):
     p, r, t = precision_recall_curve(y_true, y_prob)
     best = {"best_f1": -1.0, "best_threshold": 0.5, "precision": 0.0, "recall": 0.0}
     for i, th in enumerate(t):
@@ -58,6 +59,34 @@ def find_best_threshold(y_true, y_prob):
     return best
 
 
+def find_best_threshold_by_cost(y_true, y_prob, fn_cost=20.0, fp_cost=1.0, grid_size=500):
+    thresholds = np.linspace(0.001, 0.999, grid_size)
+    best = {
+        "best_threshold": 0.5,
+        "min_cost": float("inf"),
+        "fn": 0,
+        "fp": 0,
+        "tn": 0,
+        "tp": 0,
+    }
+
+    for th in thresholds:
+        y_pred = (y_prob >= th).astype(int)
+        tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+        total_cost = fn_cost * fn + fp_cost * fp
+
+        if total_cost < best["min_cost"]:
+            best = {
+                "best_threshold": float(th),
+                "min_cost": float(total_cost),
+                "fn": int(fn),
+                "fp": int(fp),
+                "tn": int(tn),
+                "tp": int(tp),
+            }
+    return best
+
+
 def build_models(scale_pos_weight):
     models = {
         "lr": Pipeline([
@@ -68,7 +97,7 @@ def build_models(scale_pos_weight):
                 solver="saga",
                 n_jobs=-1,
                 random_state=42,
-            ))
+            )),
         ]),
         "rf": RandomForestClassifier(
             n_estimators=150,
@@ -116,18 +145,21 @@ def main():
     parser.add_argument("--model", type=str, default="all", choices=["all", "lr", "rf", "lgbm", "xgb"])
     parser.add_argument("--max_rows", type=int, default=0, help="0 means use full dataset")
     parser.add_argument("--target", type=str, default="isFraud")
+    parser.add_argument("--threshold_mode", type=str, default="cost", choices=["f1", "cost"])
+    parser.add_argument("--fn_cost", type=float, default=20.0)
+    parser.add_argument("--fp_cost", type=float, default=1.0)
     args = parser.parse_args()
 
     ensure_dirs()
-
     df = load_clean_train("data/clean_train.csv")
 
-    # optional cap (debug only)
+    # optional cap for debug: keep earliest rows to preserve time order
     if args.max_rows and len(df) > args.max_rows:
-        df = df.sample(n=args.max_rows, random_state=42).copy()
+        df = df.sort_values("TransactionDT").iloc[: args.max_rows].copy()
 
-    # ✅ time-based split to match notebook
-    X_train, X_valid, y_train, y_valid = time_based_split(df, target_col=args.target, time_col="TransactionDT", test_size=0.2)
+    X_train, X_valid, y_train, y_valid = time_based_split(
+        df, target_col=args.target, time_col="TransactionDT", test_size=0.2
+    )
 
     X_train = X_train.astype("float32")
     X_valid = X_valid.astype("float32")
@@ -149,20 +181,34 @@ def main():
         prob = model.predict_proba(X_valid)[:, 1]
 
         default_metrics = compute_metrics(y_valid, prob, threshold=0.5)
-        tuned = find_best_threshold(y_valid, prob)
-        tuned_metrics = compute_metrics(y_valid, prob, threshold=tuned["best_threshold"])
+        f1_search = find_best_threshold_f1(y_valid, prob)
+
+        if args.threshold_mode == "cost":
+            cost_search = find_best_threshold_by_cost(
+                y_valid, prob, fn_cost=args.fn_cost, fp_cost=args.fp_cost
+            )
+            selected_threshold = cost_search["best_threshold"]
+        else:
+            cost_search = None
+            selected_threshold = f1_search["best_threshold"]
+
+        selected_metrics = compute_metrics(y_valid, prob, threshold=selected_threshold)
 
         results[name] = {
             "default_0.5": default_metrics,
-            "threshold_search": tuned,
-            "tuned": tuned_metrics,
+            "threshold_search_f1": f1_search,
+            "threshold_search_cost": cost_search,
+            "selected_threshold_mode": args.threshold_mode,
+            "selected_threshold": float(selected_threshold),
+            "selected_metrics": selected_metrics,
         }
 
-        if tuned_metrics["pr_auc"] > best_pr_auc:
-            best_pr_auc = tuned_metrics["pr_auc"]
+        # Keep model ranking by PR-AUC (threshold-independent)
+        if selected_metrics["pr_auc"] > best_pr_auc:
+            best_pr_auc = selected_metrics["pr_auc"]
             best_name = name
             best_model = model
-            best_threshold = tuned["best_threshold"]
+            best_threshold = selected_threshold
 
     save_json(
         {
@@ -174,18 +220,26 @@ def main():
             "best_threshold": float(best_threshold),
             "best_pr_auc": float(best_pr_auc),
             "split_type": "time_based",
+            "threshold_mode": args.threshold_mode,
+            "fn_cost": args.fn_cost,
+            "fp_cost": args.fp_cost,
         },
         MODELS_DIR / "metrics.json",
     )
+
     save_json(
         {
             "best_model": best_name,
             "best_threshold": float(best_threshold),
             "rows_used": int(len(df)),
             "split_type": "time_based",
+            "threshold_mode": args.threshold_mode,
+            "fn_cost": args.fn_cost,
+            "fp_cost": args.fp_cost,
         },
         MODELS_DIR / "best_model_info.json",
     )
+
     save_joblib(best_model, MODELS_DIR / "best_model.joblib")
 
     print("\nTraining complete.")

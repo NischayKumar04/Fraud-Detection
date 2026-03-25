@@ -1,6 +1,9 @@
 {
-  "best_model": "xgb",
-  "best_threshold": 0.7675812244415283,
+  "best_model": "rf",
+  "best_threshold": 0.391,
   "rows_used": 590540,
-  "split_type": "time_based"
+  "split_type": "time_based",
+  "threshold_mode": "cost",
+  "fn_cost": 20.0,
+  "fp_cost": 1.0
 }

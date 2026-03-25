@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
+import networkx as nx
 from src.utils import ROOT, DATA_DIR, MODELS_DIR, ensure_dirs, save_joblib
 
 
@@ -59,6 +59,39 @@ def add_velocity_features(df: pd.DataFrame) -> pd.DataFrame:
         df[f"{col}_mean_amt"] = df.groupby(col)["TransactionAmt"].transform("mean").fillna(0).astype("float32")
         df[f"{col}_amt_deviation"] = (df["TransactionAmt"] - df[f"{col}_mean_amt"]).abs().fillna(0).astype("float32")
         df[f"{col}_std_amt"] = df.groupby(col)["TransactionAmt"].transform("std").fillna(0).astype("float32")
+    return df
+
+
+def add_graph_features(df: pd.DataFrame) -> pd.DataFrame:
+    required = {"card1", "addr1"}
+    if not required.issubset(df.columns):
+        return df
+
+    G = nx.Graph()
+
+    card_counts = df["card1"].value_counts()
+    active_cards = card_counts[card_counts >= 3].index
+    df_graph = df[df["card1"].isin(active_cards)][["card1", "addr1"]].dropna()
+
+    addr_groups = df_graph.groupby("addr1")["card1"].apply(set)
+
+    for _, cards in addr_groups.items():
+        cards = list(cards)
+        if len(cards) < 2 or len(cards) > 50:
+            continue
+        for i in range(len(cards)):
+            for j in range(i + 1, min(len(cards), i + 10)):
+                G.add_edge(cards[i], cards[j])
+
+    card_degree = dict(G.degree())
+    card_clustering = nx.clustering(G)
+    card_pagerank = nx.pagerank(G, max_iter=50, tol=1e-4)
+
+    df["graph_degree"] = df["card1"].map(card_degree).fillna(0).astype("float32")
+    df["graph_clustering"] = df["card1"].map(card_clustering).fillna(0).astype("float32")
+    df["graph_pagerank"] = df["card1"].map(card_pagerank).fillna(0).astype("float32")
+    df["graph_degree_log"] = np.log1p(df["graph_degree"]).astype("float32")
+
     return df
 
 
@@ -139,6 +172,8 @@ def main():
     df = add_time_features(df)
     df = add_amount_features(df)
     df = add_velocity_features(df)
+    df = add_velocity_features(df)
+    df = add_graph_features(df)
 
     print("Imputing + missing flags...")
     df, medians, cat_fill = add_missing_flags_and_impute(df)

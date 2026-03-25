@@ -1,44 +1,79 @@
 # 🔍 Fraud Detection System (IEEE-CIS)
 
-An end-to-end fraud detection pipeline using the IEEE-CIS dataset (**590,540 transactions**), with reproducible preprocessing, model training, threshold tuning, evaluation, and prediction APIs.
+An end-to-end fraud detection pipeline built on the IEEE-CIS dataset with reproducible preprocessing, graph-based feature engineering, model training, cost-sensitive thresholding, evaluation, and explainability (SHAP).
 
 ---
 
-## 🚀 Project Highlights
+## ✅ Current Status
 
-- ✅ Full dataset training (`rows_used = 590,540`)
-- ✅ Time-based split to reduce leakage risk
-- ✅ Multiple models: Logistic Regression, Random Forest, LightGBM, XGBoost
-- ✅ Threshold search per model (not fixed 0.5 only)
-- ✅ Artifact-based deployment (`best_model.joblib`, `best_model_info.json`, `metrics.json`)
-- ✅ Streamlit-ready prediction workflow
-
----
-
-## 📊 Latest Results (from `models/metrics.json`)
-
-**Best model:** `xgb`  
-**Best threshold:** `0.7676`  
-**Best PR-AUC:** `0.5512`  
-**Split type:** `time_based`
-
-### Tuned metrics by model
-
-| Model | PR-AUC | ROC-AUC | F1 (tuned) | Precision (tuned) | Recall (tuned) | Best Threshold |
-|---|---:|---:|---:|---:|---:|---:|
-| Logistic Regression | 0.1785 | 0.8317 | 0.3204 | 0.2854 | 0.3652 | 0.8566 |
-| Random Forest | 0.4586 | 0.8779 | 0.4581 | 0.4913 | 0.4291 | 0.6335 |
-| LightGBM | 0.5395 | 0.9117 | 0.5295 | 0.6183 | 0.4631 | 0.8192 |
-| **XGBoost (Best)** | **0.5512** | **0.9181** | **0.5366** | **0.6159** | **0.4754** | **0.7676** |
-
-> Note: At default threshold `0.5`, recall is higher for some models, but tuned thresholds optimize F1/precision-recall tradeoff.
+- Full data used for training: **590,540 rows**
+- Split strategy: **time-based (80/20)** to reduce temporal leakage
+- Models trained: **Logistic Regression, Random Forest, LightGBM, XGBoost**
+- Feature engineering includes:
+  - time features
+  - amount/velocity features
+  - missingness indicators
+  - **graph-based fraud ring features (NetworkX centrality)**
+- Model ranking metric: **PR-AUC**
+- Serving threshold policy: **cost-sensitive** (`FN_cost`, `FP_cost` configurable)
+- Explainability: **SHAP top features export**
 
 ---
 
-## 🧱 Repository Structure
+## 🧠 Why Accuracy Is Not the Main Metric
+
+Fraud detection is highly imbalanced (~3.5% fraud).  
+A naive model that always predicts “not fraud” can still get high accuracy, so accuracy is misleading.
+
+This project prioritizes:
+- **PR-AUC** (primary ranking metric)
+- **ROC-AUC**
+- **Class-1 Recall / Precision / F1**
+- **Cost-sensitive thresholding** for realistic fraud operations
+
+---
+
+## 📊 Cost-Mode Results Summary (All on 590,540 rows, time-based split)
+
+> These are threshold-policy outcomes from your runs.
+
+### 1) Cost mode: `FN=10`, `FP=1`
+- Threshold used: **0.5030**
+- Confusion Matrix: `[[108371, 5673], [1375, 2689]]`
+- Class 1 Precision: **0.3216**
+- Class 1 Recall: **0.6617**
+- Class 1 F1: **0.4328**
+- Accuracy: **0.9403**
+
+### 2) Cost mode: `FN=20`, `FP=1`
+- Best model: **rf**
+- Threshold used: **0.3910**
+- Confusion Matrix: `[[98480, 15564], [1095, 2969]]`
+- Class 1 Precision: **0.1602**
+- Class 1 Recall: **0.7306**
+- Class 1 F1: **0.2628**
+- Accuracy: **0.8590**
+
+### 3) Cost mode: `FN=25`, `FP=1` (from `metrics.json`)
+- Best model: **xgb**
+- Threshold used: **0.2930**
+- Confusion Matrix: `[[99070, 14974], [807, 3257]]`
+- Class 1 Precision: **0.1787**
+- Class 1 Recall: **0.8014**
+- Class 1 F1: **0.2922**
+- PR-AUC (xgb): **0.5448**
+- ROC-AUC (xgb): **0.9145**
+
+> As FN cost increases, recall rises and precision usually drops — expected for fraud-alert systems.
+
+---
+
+## 🏗️ Project Structure
 
 ```text
 Fraud-Detection/
+├── app/
+│   └── streamlit_app.py
 ├── data/
 │   ├── train_transaction.csv
 │   ├── train_identity.csv
@@ -48,21 +83,22 @@ Fraud-Detection/
 │   ├── best_model_info.json
 │   ├── metrics.json
 │   ├── preprocess_artifacts.joblib
-│   └── preprocess_summary.json
-├── src/
-│   ├── data_loader.py
-│   ├── preprocess.py
-│   ├── features.py
-│   ├── train.py
-│   ├── evaluate.py
-│   ├── predict.py
-│   └── utils.py
-├── app/
-│   └── streamlit_app.py
+│   ├── preprocess_summary.json
+│   ├── shap_top_features.csv
+│   └── shap_top_features.png
 ├── notebooks/
 │   ├── 01_eda.ipynb
 │   ├── 2_feature_engg.ipynb
 │   └── 3_Modelling.ipynb
+├── src/
+│   ├── data_loader.py
+│   ├── evaluate.py
+│   ├── explain.py
+│   ├── features.py
+│   ├── predict.py
+│   ├── preprocess.py
+│   ├── train.py
+│   └── utils.py
 ├── requirements.txt
 └── README.md
 ```
@@ -76,9 +112,9 @@ git clone https://github.com/NischayKumar04/Fraud-Detection.git
 cd Fraud-Detection
 
 python -m venv .venv
-# Windows:
+# Windows
 .venv\Scripts\activate
-# Linux/Mac:
+# Linux/Mac
 # source .venv/bin/activate
 
 pip install --upgrade pip
@@ -89,13 +125,13 @@ pip install -r requirements.txt
 
 ## 🧹 Preprocessing
 
-Build clean training data from raw Kaggle files:
+Build clean training data from raw files:
 
 ```bash
 python -m src.preprocess
 ```
 
-This creates:
+Outputs:
 - `data/clean_train.csv`
 - `models/preprocess_artifacts.joblib`
 - `models/preprocess_summary.json`
@@ -104,17 +140,18 @@ This creates:
 
 ## 🏋️ Training
 
-Train all models and automatically select best one by PR-AUC:
+Train models and choose threshold policy:
 
 ```bash
-python -m src.train --model all --max_rows 0
+python -m src.train --model all --max_rows 0 --threshold_mode cost --fn_cost 25 --fp_cost 1
 ```
 
-Arguments:
+Key args:
 - `--model`: `all | lr | rf | lgbm | xgb`
-- `--max_rows 0`: use full dataset (debug cap if >0)
+- `--threshold_mode`: `f1 | cost`
+- `--fn_cost`, `--fp_cost`: relative penalty for missed fraud vs false alert
 
-Outputs:
+Saved:
 - `models/best_model.joblib`
 - `models/best_model_info.json`
 - `models/metrics.json`
@@ -127,23 +164,41 @@ Outputs:
 python -m src.evaluate
 ```
 
-- Loads best model + tuned threshold from artifacts
-- Prints confusion matrix + classification report
+Loads best model + saved threshold and prints:
+- confusion matrix
+- classification report
 
 ---
 
-## 🔮 Prediction
-
-Example usage in Python:
+## 🔮 Batch Prediction
 
 ```python
 import pandas as pd
 from src.predict import predict_batch
 
 df = pd.read_csv("data/clean_train.csv").head(100)
-out = predict_batch(df)  # uses saved tuned threshold automatically
-print(out[["fraud_probability", "fraud_prediction"]].head())
+pred_df = predict_batch(df)  # uses saved threshold from best_model_info.json
+print(pred_df[["fraud_probability", "fraud_prediction"]].head())
 ```
+
+---
+
+## 🔎 Model Explainability (SHAP)
+
+This repo includes `src/explain.py` for interpretability.
+
+Run:
+
+```bash
+python -m src.explain
+```
+
+It:
+- loads `models/best_model.joblib`
+- computes SHAP values on sampled data
+- exports top features to:
+  - `models/shap_top_features.csv`
+  - `models/shap_top_features.png`
 
 ---
 
@@ -155,27 +210,24 @@ streamlit run app/streamlit_app.py
 
 Supports:
 - CSV upload scoring
-- sample batch scoring
-- threshold slider for business tuning
+- probability + prediction output
+- threshold adjustment for scenario testing
 
 ---
 
-## 📌 Current Notes
+## 💼 Resume-ready Project Summary
 
-- `preprocess_summary.json` currently stores absolute Windows paths.  
-  For portability, prefer relative paths in future update.
-- Threshold was optimized for F1; if your business needs higher recall, use a lower threshold in serving (e.g., 0.5–0.65) and monitor false positives.
+Built a fraud detection pipeline on **590K transactions** with **graph-based fraud ring features (NetworkX centrality)**, time-aware validation, and cost-sensitive thresholding to control precision–recall tradeoffs in imbalanced data.
 
 ---
 
-## 🛣️ Next Improvements
+## 🚀 Next Improvements
 
-- [ ] Add graph features from notebook directly into `src/preprocess.py`
-- [ ] Add leakage-safe target encoding in `src` pipeline
-- [ ] Add cross-validation (time-series folds)
-- [ ] Add SHAP explainability report
-- [ ] Add `tests/` (smoke + metric sanity + schema validation)
-- [ ] Add FastAPI inference endpoint + Dockerized deployment
+- [ ] Add time-based cross-validation (mean ± std across folds)
+- [ ] Add cost-based **model selection** (not only threshold selection)
+- [ ] Add FastAPI endpoint for real-time inference
+- [ ] Dockerize training + serving
+- [ ] Add schema checks and unit tests
 
 ---
 
