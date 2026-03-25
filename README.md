@@ -35,7 +35,6 @@ This project prioritizes:
 
 ## 📊 Cost-Mode Results Summary (All on 590,540 rows, time-based split)
 
-> These are threshold-policy outcomes from your runs.
 
 ### 1) Cost mode: `FN=10`, `FP=1`
 - Threshold used: **0.5030**
