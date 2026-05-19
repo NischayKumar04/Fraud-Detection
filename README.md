@@ -214,9 +214,6 @@ Supports:
 
 ---
 
-## 💼 Resume-ready Project Summary
-
-Built a fraud detection pipeline on **590K transactions** with **graph-based fraud ring features (NetworkX centrality)**, time-aware validation, and cost-sensitive thresholding to control precision–recall tradeoffs in imbalanced data.
 
 ---
 
